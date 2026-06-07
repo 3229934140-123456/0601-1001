@@ -102,37 +102,33 @@ export async function merchantLogin(req: Request, res: Response) {
       return res.status(400).json(errorResponse('手机号和密码不能为空', 400))
     }
 
-    const user = await prisma.user.findUnique({
+    const merchant = await prisma.merchant.findUnique({
       where: { phone },
     })
 
-    if (!user) {
+    if (!merchant) {
       return res.status(401).json(errorResponse('手机号或密码错误', 401))
     }
 
-    if (user.role !== 'MERCHANT' && user.role !== 'ADMIN') {
-      return res.status(403).json(errorResponse('无商家权限', 403))
-    }
-
-    const isValidPassword = await bcrypt.compare(password, user.password)
+    const isValidPassword = await bcrypt.compare(password, merchant.password)
 
     if (!isValidPassword) {
       return res.status(401).json(errorResponse('手机号或密码错误', 401))
     }
 
-    const token = generateToken(user.id, user.role)
+    const token = generateToken(merchant.id, 'MERCHANT', 'merchant')
 
-    const userData = {
-      id: user.id,
-      phone: user.phone,
-      nickname: user.nickname,
-      avatar: user.avatar,
-      role: user.role,
-      createdAt: user.createdAt,
+    const merchantData = {
+      id: merchant.id,
+      phone: merchant.phone,
+      name: merchant.name,
+      avatar: merchant.avatar,
+      role: 'MERCHANT',
+      createdAt: merchant.createdAt,
     }
 
     return res.json(successResponse({
-      user: userData,
+      merchant: merchantData,
       token,
     }, '商家登录成功'))
   } catch (error) {
@@ -144,9 +140,32 @@ export async function merchantLogin(req: Request, res: Response) {
 export async function getCurrentUser(req: AuthRequest, res: Response) {
   try {
     const userId = req.user?.id
+    const userRole = req.user?.role
 
     if (!userId) {
       return res.status(401).json(errorResponse('未登录', 401))
+    }
+
+    if (userRole === 'MERCHANT' && req.merchant) {
+      const merchant = await prisma.merchant.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          phone: true,
+          name: true,
+          avatar: true,
+          createdAt: true,
+        },
+      })
+
+      if (!merchant) {
+        return res.status(404).json(errorResponse('商家不存在', 404))
+      }
+
+      return res.json(successResponse({
+        ...merchant,
+        role: 'MERCHANT',
+      }, '获取商家信息成功'))
     }
 
     const user = await prisma.user.findUnique({
@@ -167,7 +186,7 @@ export async function getCurrentUser(req: AuthRequest, res: Response) {
 
     return res.json(successResponse(user, '获取用户信息成功'))
   } catch (error) {
-    console.error('获取用户信息失败:', error)
+    console.error('获取当前用户信息失败:', error)
     return res.status(500).json(errorResponse('获取用户信息失败', 500))
   }
 }

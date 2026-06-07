@@ -34,6 +34,14 @@ export async function createReview(req: AuthRequest, res: Response) {
       return res.status(403).json(errorResponse('只能评价自己的订单', 403))
     }
 
+    if (order.storeId !== parseInt(storeId)) {
+      return res.status(400).json(errorResponse('订单与门店不匹配', 400))
+    }
+
+    if (order.status !== 'COMPLETED') {
+      return res.status(400).json(errorResponse('订单未完成，无法评价', 400))
+    }
+
     const existingReview = await prisma.review.findUnique({
       where: { orderId: parseInt(orderId) },
     })
@@ -46,7 +54,7 @@ export async function createReview(req: AuthRequest, res: Response) {
       data: {
         orderId: parseInt(orderId),
         userId,
-        storeId: parseInt(storeId),
+        storeId: order.storeId,
         rating: parseInt(rating),
         content,
         images: images ? JSON.stringify(images) : undefined,
@@ -56,7 +64,7 @@ export async function createReview(req: AuthRequest, res: Response) {
 
     const storeReviews = await prisma.review.findMany({
       where: {
-        storeId: parseInt(storeId),
+        storeId: order.storeId,
         status: 'APPROVED',
       },
       select: { rating: true },
@@ -67,7 +75,7 @@ export async function createReview(req: AuthRequest, res: Response) {
       : 5.0
 
     await prisma.store.update({
-      where: { id: parseInt(storeId) },
+      where: { id: order.storeId },
       data: { rating: parseFloat(avgRating.toFixed(1)) },
     })
 

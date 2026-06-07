@@ -92,9 +92,18 @@ export async function getRiderDetail(req: AuthRequest, res: Response) {
 
 export async function updateRiderStatus(req: AuthRequest, res: Response) {
   try {
+    const userRole = req.user?.role
     const { id } = req.params
     const riderId = parseInt(id)
     const { status } = req.body
+
+    if (!userRole) {
+      return res.status(401).json(errorResponse('未登录', 401))
+    }
+
+    if (userRole !== 'ADMIN' && userRole !== 'MERCHANT') {
+      return res.status(403).json(errorResponse('无权限操作', 403))
+    }
 
     if (isNaN(riderId)) {
       return res.status(400).json(errorResponse('无效的骑手ID', 400))
@@ -126,9 +135,18 @@ export async function updateRiderStatus(req: AuthRequest, res: Response) {
 
 export async function updateRiderLocation(req: AuthRequest, res: Response) {
   try {
+    const userRole = req.user?.role
     const { id } = req.params
     const riderId = parseInt(id)
     const { latitude, longitude } = req.body
+
+    if (!userRole) {
+      return res.status(401).json(errorResponse('未登录', 401))
+    }
+
+    if (userRole !== 'ADMIN' && userRole !== 'MERCHANT') {
+      return res.status(403).json(errorResponse('无权限操作', 403))
+    }
 
     if (isNaN(riderId)) {
       return res.status(400).json(errorResponse('无效的骑手ID', 400))

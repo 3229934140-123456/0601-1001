@@ -55,6 +55,45 @@ export function calculateDiscount(totalAmount: number, promotions: Array<{ minAm
   return maxDiscount
 }
 
+export function calculateBestPromotion(totalAmount: number, promotions: Array<{ minAmount: number; discount: number }>): {
+  discount: number
+  usedPromotion: { minAmount: number; discount: number } | null
+  availablePromotions: Array<{ minAmount: number; discount: number }>
+  nextPromotion: { minAmount: number; discount: number; diff: number } | null
+} {
+  const sortedPromotions = [...promotions].sort((a, b) => a.minAmount - b.minAmount)
+  const availablePromotions = sortedPromotions.filter(p => totalAmount >= p.minAmount)
+  
+  let usedPromotion: { minAmount: number; discount: number } | null = null
+  let maxDiscount = 0
+  
+  for (const promo of availablePromotions) {
+    if (promo.discount > maxDiscount) {
+      maxDiscount = promo.discount
+      usedPromotion = promo
+    }
+  }
+  
+  const unavailablePromotions = sortedPromotions.filter(p => totalAmount < p.minAmount)
+  let nextPromotion: { minAmount: number; discount: number; diff: number } | null = null
+  
+  if (unavailablePromotions.length > 0) {
+    const next = unavailablePromotions[0]
+    nextPromotion = {
+      minAmount: next.minAmount,
+      discount: next.discount,
+      diff: parseFloat((next.minAmount - totalAmount).toFixed(2)),
+    }
+  }
+  
+  return {
+    discount: maxDiscount,
+    usedPromotion,
+    availablePromotions,
+    nextPromotion,
+  }
+}
+
 export function successResponse(data: any, message: string = 'success') {
   return {
     code: 0,

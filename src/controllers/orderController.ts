@@ -1,6 +1,6 @@
 import { Response } from 'express'
 import prisma from '../lib/prisma'
-import { successResponse, errorResponse, generateOrderNo, calculateDiscount } from '../utils'
+import { successResponse, errorResponse, generateOrderNo, calculateBestPromotion } from '../utils'
 import { AuthRequest } from '../middleware/auth'
 
 export async function createOrder(req: AuthRequest, res: Response) {
@@ -39,9 +39,10 @@ export async function createOrder(req: AuthRequest, res: Response) {
       include: {
         promotions: {
           where: {
-            type: 'fullReduce',
+            type: 'full_reduce',
             isActive: true,
           },
+          orderBy: { minAmount: 'asc' },
         },
       },
     })
@@ -93,7 +94,8 @@ export async function createOrder(req: AuthRequest, res: Response) {
       discount: p.discount,
     }))
 
-    const discountAmount = calculateDiscount(totalAmount, promotions)
+    const promoResult = calculateBestPromotion(totalAmount, promotions)
+    const discountAmount = promoResult.discount
     const deliveryFee = type === 'delivery' ? store.deliveryFee : 0
     const payAmount = totalAmount - discountAmount + deliveryFee
 
@@ -151,7 +153,11 @@ export async function createOrder(req: AuthRequest, res: Response) {
       return newOrder
     })
 
-    res.json(successResponse(order, '创建订单成功'))
+    res.json(successResponse({
+      ...order,
+      usedPromotion: promoResult.usedPromotion,
+      availablePromotions: promoResult.availablePromotions,
+    }, '创建订单成功'))
   } catch (error) {
     console.error('创建订单失败:', error)
     res.status(500).json(errorResponse('创建订单失败', 500))

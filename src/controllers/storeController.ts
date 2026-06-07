@@ -134,9 +134,15 @@ export async function getStoreAnnouncements(req: AuthRequest, res: Response) {
 
 export async function createAnnouncement(req: AuthRequest, res: Response) {
   try {
+    const userId = req.user?.id
+    const userRole = req.user?.role
     const { id } = req.params
     const storeId = parseInt(id)
     const { title, content, isActive } = req.body
+
+    if (!userId) {
+      return res.status(401).json(errorResponse('未登录', 401))
+    }
 
     if (isNaN(storeId)) {
       return res.status(400).json(errorResponse('无效的门店ID', 400))
@@ -154,8 +160,10 @@ export async function createAnnouncement(req: AuthRequest, res: Response) {
       return res.status(404).json(errorResponse('门店不存在', 404))
     }
 
-    if (req.user && req.user.role === 'MERCHANT') {
-      // 如果是商家，需要验证门店归属
+    if (userRole === 'MERCHANT') {
+      if (store.merchantId !== userId) {
+        return res.status(403).json(errorResponse('无权限操作', 403))
+      }
     }
 
     const announcement = await prisma.storeAnnouncement.create({

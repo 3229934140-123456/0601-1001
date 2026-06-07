@@ -9,6 +9,10 @@ export interface AuthRequest extends Request {
     id: number
     role: string
   }
+  merchant?: {
+    id: number
+    role: string
+  }
 }
 
 export function authMiddleware(roles: string[] = []) {
@@ -20,13 +24,19 @@ export function authMiddleware(roles: string[] = []) {
         return res.status(401).json(errorResponse('未登录', 401))
       }
       
-      const decoded = jwt.verify(token, JWT_SECRET) as { id: number; role: string }
+      const decoded = jwt.verify(token, JWT_SECRET) as { id: number; role: string; entityType?: string }
       
       if (roles.length > 0 && !roles.includes(decoded.role)) {
         return res.status(403).json(errorResponse('无权限访问', 403))
       }
       
-      req.user = decoded
+      if (decoded.entityType === 'merchant' || decoded.role === 'MERCHANT') {
+        req.merchant = { id: decoded.id, role: decoded.role }
+        req.user = { id: decoded.id, role: decoded.role }
+      } else {
+        req.user = { id: decoded.id, role: decoded.role }
+      }
+      
       next()
     } catch (error) {
       return res.status(401).json(errorResponse('登录已过期', 401))
@@ -34,9 +44,9 @@ export function authMiddleware(roles: string[] = []) {
   }
 }
 
-export function generateToken(userId: number, role: string): string {
+export function generateToken(userId: number, role: string, entityType: string = 'user'): string {
   return jwt.sign(
-    { id: userId, role },
+    { id: userId, role, entityType },
     JWT_SECRET,
     { expiresIn: '7d' }
   )

@@ -1,6 +1,6 @@
 import { Response } from 'express'
 import prisma from '../lib/prisma'
-import { successResponse, errorResponse, calculateDiscount } from '../utils'
+import { successResponse, errorResponse, calculateBestPromotion } from '../utils'
 import { AuthRequest } from '../middleware/auth'
 
 export async function getCart(req: AuthRequest, res: Response) {
@@ -275,9 +275,10 @@ export async function calculateCart(req: AuthRequest, res: Response) {
       include: {
         promotions: {
           where: {
-            type: 'fullReduce',
+            type: 'full_reduce',
             isActive: true,
           },
+          orderBy: { minAmount: 'asc' },
         },
       },
     })
@@ -297,7 +298,8 @@ export async function calculateCart(req: AuthRequest, res: Response) {
       discount: p.discount,
     }))
 
-    const discountAmount = calculateDiscount(totalAmount, promotions)
+    const promoResult = calculateBestPromotion(totalAmount, promotions)
+    const discountAmount = promoResult.discount
     const deliveryFee = store.deliveryFee
     const payAmount = totalAmount - discountAmount + deliveryFee
 
@@ -306,7 +308,10 @@ export async function calculateCart(req: AuthRequest, res: Response) {
       discountAmount,
       deliveryFee,
       payAmount,
-      promotions: promotions.filter((p: any) => totalAmount >= p.minAmount),
+      usedPromotion: promoResult.usedPromotion,
+      availablePromotions: promoResult.availablePromotions,
+      nextPromotion: promoResult.nextPromotion,
+      allPromotions: promotions,
     }, '计算成功'))
   } catch (error) {
     console.error('计算购物车失败:', error)
