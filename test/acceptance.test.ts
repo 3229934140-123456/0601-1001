@@ -1306,6 +1306,396 @@ async function runTests() {
     assert('清空后重新计算', false, `请求失败: ${e.message}`)
   }
 
+  console.log('\n📋 测试18：财务对账接口')
+  console.log('-'.repeat(40))
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/financial?timeRange=30days&period=day',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '商家财务对账接口返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    assert(
+      '财务对账包含汇总信息',
+      data.summary !== undefined,
+      `summary: ${data.summary}`
+    )
+    assert(
+      '汇总包含总收入',
+      data.summary?.totalIncome !== undefined,
+      `totalIncome: ${data.summary?.totalIncome}`
+    )
+    assert(
+      '汇总包含退款金额',
+      data.summary?.totalRefund !== undefined,
+      `totalRefund: ${data.summary?.totalRefund}`
+    )
+    assert(
+      '汇总包含平台服务费',
+      data.summary?.totalServiceFee !== undefined,
+      `totalServiceFee: ${data.summary?.totalServiceFee}`
+    )
+    assert(
+      '汇总包含商家预计入账',
+      data.summary?.totalMerchantIncome !== undefined,
+      `totalMerchantIncome: ${data.summary?.totalMerchantIncome}`
+    )
+    assert(
+      '包含按日分组数据',
+      Array.isArray(data.periodData),
+      `periodData 类型: ${typeof data.periodData}`
+    )
+    assert(
+      '包含订单明细列表',
+      Array.isArray(data.orderDetails?.list),
+      `orderDetails.list 类型: ${typeof data.orderDetails?.list}`
+    )
+
+    if (data.orderDetails?.list?.length > 0) {
+      const order = data.orderDetails.list[0]
+      assert(
+        '订单明细包含计算过程',
+        order.calculation !== undefined,
+        `calculation: ${order.calculation}`
+      )
+      assert(
+        '计算过程包含商家入账结果',
+        order.calculation?.equalsMerchantIncome !== undefined,
+        `equalsMerchantIncome: ${order.calculation?.equalsMerchantIncome}`
+      )
+    }
+
+    const { totalIncome, totalRefund, totalServiceFee, totalMerchantIncome } = data.summary
+    const calculated = totalIncome - totalRefund - totalServiceFee
+    assert(
+      '商家入账金额 = 总收入 - 退款 - 服务费',
+      Math.abs(calculated - totalMerchantIncome) < 0.01,
+      `计算: ${calculated}, 实际: ${totalMerchantIncome}`
+    )
+
+    console.log(`         收入: ¥${totalIncome}, 退款: ¥${totalRefund}, 服务费: ¥${totalServiceFee.toFixed?.(2) || totalServiceFee}, 商家入账: ¥${totalMerchantIncome.toFixed?.(2) || totalMerchantIncome}`)
+  } catch (e: any) {
+    assert('商家财务对账', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/financial?timeRange=30days&period=month',
+      undefined,
+      adminToken
+    )
+    assert(
+      '管理员财务对账按月返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    const data = res.body?.data || {}
+    assert(
+      '管理员财务对账包含全平台数据',
+      data.summary?.orderCount >= 2,
+      `订单数: ${data.summary?.orderCount}`
+    )
+    console.log(`         管理员全平台订单: ${data.summary?.orderCount}笔, 商家入账: ¥${data.summary?.totalMerchantIncome}`)
+  } catch (e: any) {
+    assert('管理员财务对账', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/financial?timeRange=30days&storeId=2',
+      undefined,
+      merchantToken
+    )
+    assert(
+      '商家查其他门店财务对账返回403',
+      res.statusCode === 403 || res.body?.code === 403,
+      `状态码: ${res.statusCode}`
+    )
+  } catch (e: any) {
+    assert('商家越权财务对账', false, `请求失败: ${e.message}`)
+  }
+
+  console.log('\n📋 测试19：报表导出接口')
+  console.log('-'.repeat(40))
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/export?type=business&timeRange=7days',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '经营分析导出成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    assert(
+      '导出包含类型标识',
+      data.exportType === 'business',
+      `exportType: ${data.exportType}`
+    )
+    assert(
+      '导出包含时间范围',
+      data.startDate !== undefined && data.endDate !== undefined,
+      `日期: ${data.startDate} ~ ${data.endDate}`
+    )
+    assert(
+      '导出包含汇总数据',
+      data.summary !== undefined,
+      `summary: ${data.summary}`
+    )
+    console.log(`         经营导出: ${data.summary?.totalOrders || 0}笔订单, ¥${data.summary?.totalRevenue || 0}营收`)
+  } catch (e: any) {
+    assert('经营分析导出', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/export?type=dish&timeRange=30days',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '菜品分析导出成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    assert(
+      '导出类型为菜品',
+      data.exportType === 'dish',
+      `exportType: ${data.exportType}`
+    )
+    assert(
+      '导出包含菜品列表',
+      Array.isArray(data.dishList),
+      `dishList 类型: ${typeof data.dishList}`
+    )
+    console.log(`         菜品导出: ${data.dishList?.length || 0}种菜品`)
+  } catch (e: any) {
+    assert('菜品分析导出', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/export?type=financial&timeRange=30days&storeId=1',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '财务对账导出成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    assert(
+      '财务导出包含订单明细',
+      Array.isArray(data.orderList),
+      `orderList 类型: ${typeof data.orderList}`
+    )
+    assert(
+      '财务导出包含汇总',
+      data.summary?.totalMerchantIncome !== undefined,
+      `totalMerchantIncome: ${data.summary?.totalMerchantIncome}`
+    )
+    console.log(`         财务导出: ${data.orderList?.length || 0}笔订单, 商家入账 ¥${data.summary?.totalMerchantIncome || 0}`)
+  } catch (e: any) {
+    assert('财务对账导出', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/export?type=invalid',
+      undefined,
+      merchantToken
+    )
+    assert(
+      '不支持的导出类型返回400',
+      res.statusCode === 400 || res.body?.code === 400,
+      `状态码: ${res.statusCode}`
+    )
+  } catch (e: any) {
+    assert('无效导出类型', false, `请求失败: ${e.message}`)
+  }
+
+  console.log('\n📋 测试20：菜品规格分析 + 热门菜增强')
+  console.log('-'.repeat(40))
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/dishes?timeRange=30days',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '菜品分析返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+
+    if (data.dishList?.length > 0) {
+      const dish = data.dishList[0]
+      assert(
+        '菜品包含门店名称',
+        dish.storeName !== undefined,
+        `storeName: ${dish.storeName}`
+      )
+      assert(
+        '菜品包含规格明细',
+        Array.isArray(dish.specsBreakdown),
+        `specsBreakdown 类型: ${typeof dish.specsBreakdown}`
+      )
+      assert(
+        '菜品包含退款订单数',
+        dish.refundOrderCount !== undefined,
+        `refundOrderCount: ${dish.refundOrderCount}`
+      )
+
+      if (dish.specsBreakdown?.length > 0) {
+        const spec = dish.specsBreakdown[0]
+        assert(
+          '规格包含销量',
+          spec.salesCount !== undefined,
+          `spec salesCount: ${spec.salesCount}`
+        )
+        assert(
+          '规格包含销售额',
+          spec.salesAmount !== undefined,
+          `spec salesAmount: ${spec.salesAmount}`
+        )
+      }
+      console.log(`         TOP菜品: ${dish.dishName}, 规格数: ${dish.specsBreakdown?.length || 0}, 销量: ${dish.salesCount}`)
+    }
+  } catch (e: any) {
+    assert('菜品规格分析', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/hot-dishes?timeRange=30days&limit=5',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '热门菜分析返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+
+    if (data.hotDishes?.length > 0) {
+      const dish = data.hotDishes[0]
+      assert(
+        '热门菜包含门店名',
+        dish.storeName !== undefined,
+        `storeName: ${dish.storeName}`
+      )
+      assert(
+        '热门菜包含规格贡献',
+        Array.isArray(dish.specsContribution),
+        `specsContribution 类型: ${typeof dish.specsContribution}`
+      )
+      console.log(`         热门TOP1: ${dish.dishName} (${dish.storeName}), 销量: ${dish.salesCount}`)
+    }
+  } catch (e: any) {
+    assert('热门菜增强', false, `请求失败: ${e.message}`)
+  }
+
+  console.log('\n📋 测试21：经营分析口径修复验证')
+  console.log('-'.repeat(40))
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/business?startDate=2025-01-01&endDate=2025-12-31',
+      undefined,
+      merchantToken
+    )
+    assert(
+      '自定义日期范围返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    const data = res.body?.data || {}
+    assert(
+      '返回的开始日期正确',
+      data.startDate === '2025-01-01',
+      `startDate: ${data.startDate}`
+    )
+    assert(
+      '返回的结束日期正确',
+      data.endDate === '2025-12-31',
+      `endDate: ${data.endDate}`
+    )
+    console.log(`         自定义日期: ${data.startDate} ~ ${data.endDate}, 订单数: ${data.totalOrders}`)
+  } catch (e: any) {
+    assert('自定义日期范围', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/business?timeRange=30days&merchantId=1',
+      undefined,
+      adminToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '管理员按商家筛选返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    assert(
+      '按商家筛选后门店拆分只包含该商家门店',
+      data.storeBreakdown?.every((s: any) => s.merchantId === 1) ?? true,
+      `门店 merchantId: ${data.storeBreakdown?.map((s: any) => s.merchantId)?.join(', ')}`
+    )
+    console.log(`         商家1门店数: ${data.storeBreakdown?.length || 0}家`)
+  } catch (e: any) {
+    assert('管理员按商家筛选', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/business?timeRange=30days',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+
+    const breakdownRefundSum = data.storeBreakdown?.reduce(
+      (sum: number, s: any) => sum + s.refundAmount,
+      0
+    ) || 0
+
+    assert(
+      '门店拆分退款金额总和 = 总退款金额',
+      Math.abs(breakdownRefundSum - data.totalRefund) < 0.01,
+      `拆分合计: ${breakdownRefundSum}, 总计: ${data.totalRefund}`
+    )
+    console.log(`         总退款: ¥${data.totalRefund}, 拆分合计: ¥${breakdownRefundSum}`)
+  } catch (e: any) {
+    assert('退款金额拆分对齐', false, `请求失败: ${e.message}`)
+  }
+
   console.log('\n' + '='.repeat(60))
   console.log('📊 测试结果汇总')
   console.log('='.repeat(60))
