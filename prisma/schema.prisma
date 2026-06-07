@@ -1,0 +1,342 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  phone       String   @unique
+  nickname    String?
+  avatar      String?
+  role        String   @default("CUSTOMER")
+  password    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  orders      Order[]
+  reviews     Review[]
+  cartItems   CartItem[]
+  queues      QueueNumber[]
+  reservations Reservation[]
+}
+
+model Merchant {
+  id          Int      @id @default(autoincrement())
+  name        String
+  phone       String   @unique
+  password    String
+  avatar      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  stores      Store[]
+}
+
+model Store {
+  id              Int      @id @default(autoincrement())
+  merchantId      Int
+  name            String
+  description     String?
+  coverImage      String?
+  address         String
+  latitude        Float
+  longitude       Float
+  phone           String?
+  openingTime     String
+  closingTime     String
+  deliveryFee     Float    @default(0)
+  minOrderAmount  Float    @default(0)
+  rating          Float    @default(5.0)
+  salesCount      Int      @default(0)
+  isOpen          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  merchant        Merchant @relation(fields: [merchantId], references: [id])
+  categories      Category[]
+  dishes          Dish[]
+  announcements   StoreAnnouncement[]
+  orders          Order[]
+  reviews         Review[]
+  promotions      Promotion[]
+  tables          Table[]
+  queues          QueueNumber[]
+  reservations    Reservation[]
+  cartItems       CartItem[]
+  
+  @@index([merchantId])
+  @@index([latitude, longitude])
+}
+
+model StoreAnnouncement {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  title       String
+  content     String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  store       Store    @relation(fields: [storeId], references: [id])
+  
+  @@index([storeId])
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  name        String
+  sort        Int      @default(0)
+  createdAt   DateTime @default(now())
+  
+  store       Store    @relation(fields: [storeId], references: [id])
+  dishes      Dish[]
+  
+  @@index([storeId])
+}
+
+model Dish {
+  id              Int      @id @default(autoincrement())
+  storeId         Int
+  categoryId      Int
+  name            String
+  description     String?
+  image           String?
+  price           Float
+  originalPrice   Float?
+  salesCount      Int      @default(0)
+  stock           Int      @default(100)
+  isHot           Boolean  @default(false)
+  isOnSale        Boolean  @default(true)
+  sort            Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  store           Store    @relation(fields: [storeId], references: [id])
+  category        Category @relation(fields: [categoryId], references: [id])
+  specs           DishSpec[]
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+  
+  @@index([storeId])
+  @@index([categoryId])
+}
+
+model DishSpec {
+  id          Int      @id @default(autoincrement())
+  dishId      Int
+  name        String
+  options     String
+  isRequired  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  dish        Dish     @relation(fields: [dishId], references: [id])
+  
+  @@index([dishId])
+}
+
+model Promotion {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  type        String
+  minAmount   Float
+  discount    Float
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  store       Store    @relation(fields: [storeId], references: [id])
+  
+  @@index([storeId])
+}
+
+model CartItem {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  storeId     Int
+  dishId      Int
+  quantity    Int      @default(1)
+  specs       String?
+  remark      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id])
+  store       Store    @relation(fields: [storeId], references: [id])
+  dish        Dish     @relation(fields: [dishId], references: [id])
+  
+  @@index([userId, storeId])
+}
+
+model Order {
+  id              Int      @id @default(autoincrement())
+  orderNo         String   @unique
+  userId          Int
+  storeId         Int
+  totalAmount     Float
+  discountAmount  Float    @default(0)
+  deliveryFee     Float    @default(0)
+  payAmount       Float
+  status          String   @default("PENDING")
+  type            String   @default("delivery")
+  tableNo         String?
+  address         String?
+  contactName     String?
+  contactPhone    String?
+  remark          String?
+  invoiceInfo     String?
+  riderId         Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  user            User     @relation(fields: [userId], references: [id])
+  store           Store    @relation(fields: [storeId], references: [id])
+  items           OrderItem[]
+  payment         Payment?
+  refunds         Refund[]
+  
+  @@index([userId])
+  @@index([storeId])
+  @@index([status])
+}
+
+model OrderItem {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  dishId      Int
+  dishName    String
+  dishImage   String?
+  price       Float
+  quantity    Int
+  specs       String?
+  remark      String?
+  createdAt   DateTime @default(now())
+  
+  order       Order    @relation(fields: [orderId], references: [id])
+  dish        Dish     @relation(fields: [dishId], references: [id])
+  
+  @@index([orderId])
+}
+
+model Payment {
+  id              Int      @id @default(autoincrement())
+  orderId         Int      @unique
+  paymentNo       String   @unique
+  amount          Float
+  status          String   @default("UNPAID")
+  paymentMethod   String   @default("wechat")
+  paidAt          DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  order           Order    @relation(fields: [orderId], references: [id])
+}
+
+model Refund {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  reason      String
+  amount      Float
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  order       Order    @relation(fields: [orderId], references: [id])
+  
+  @@index([orderId])
+}
+
+model Table {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  tableNo     String
+  seats       Int      @default(4)
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  store       Store    @relation(fields: [storeId], references: [id])
+  reservations Reservation[]
+  
+  @@index([storeId])
+  @@unique([storeId, tableNo])
+}
+
+model QueueNumber {
+  id          Int      @id @default(autoincrement())
+  storeId     Int
+  userId      Int
+  queueType   String
+  number      Int
+  peopleCount Int      @default(2)
+  status      String   @default("WAITING")
+  calledAt    DateTime?
+  createdAt   DateTime @default(now())
+  
+  store       Store    @relation(fields: [storeId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+  
+  @@index([storeId, status])
+  @@index([userId])
+}
+
+model Reservation {
+  id              Int      @id @default(autoincrement())
+  storeId         Int
+  userId          Int
+  tableId         Int?
+  peopleCount     Int      @default(2)
+  reservationTime DateTime
+  contactName     String
+  contactPhone    String
+  remark          String?
+  status          String   @default("PENDING")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  store           Store    @relation(fields: [storeId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
+  table           Table?   @relation(fields: [tableId], references: [id])
+  
+  @@index([storeId])
+  @@index([userId])
+}
+
+model Rider {
+  id          Int      @id @default(autoincrement())
+  name        String
+  phone       String   @unique
+  avatar      String?
+  status      String   @default("IDLE")
+  latitude    Float?
+  longitude   Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([status])
+}
+
+model Review {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  userId      Int
+  storeId     Int
+  rating      Int
+  content     String?
+  images      String?
+  status      String   @default("APPROVED")
+  isAppealed  Boolean  @default(false)
+  appealReason String?
+  appealReply  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id])
+  store       Store    @relation(fields: [storeId], references: [id])
+  
+  @@index([storeId])
+  @@index([userId])
+  @@unique([orderId])
+}
