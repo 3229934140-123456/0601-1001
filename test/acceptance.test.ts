@@ -579,6 +579,415 @@ async function runTests() {
     assert('商家越权发公告', false, `请求失败: ${e.message}`)
   }
 
+  console.log('\n📋 测试10：门店订单列表入口验证')
+  console.log('-'.repeat(40))
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/orders/store/1?page=1&pageSize=10',
+      undefined,
+      merchantToken
+    )
+    assert(
+      '商家查自己门店订单返回列表',
+      res.statusCode === 200 && res.body?.code === 0 && Array.isArray(res.body?.data?.list),
+      `状态码: ${res.statusCode}, 响应: ${JSON.stringify(res.body?.data?.list?.length || 0)}条`
+    )
+    if (res.body?.data?.list) {
+      console.log(`         订单数量: ${res.body.data.list.length} 条`)
+    }
+  } catch (e: any) {
+    assert('商家查自己门店订单', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/orders/store/2?page=1&pageSize=10',
+      undefined,
+      merchantToken
+    )
+    assert(
+      '商家查其他门店订单返回403',
+      res.statusCode === 403 || res.body?.code === 403,
+      `状态码: ${res.statusCode}, 响应: ${JSON.stringify(res.body)}`
+    )
+  } catch (e: any) {
+    assert('商家查其他门店订单', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/orders/store/2?page=1&pageSize=10',
+      undefined,
+      adminToken
+    )
+    assert(
+      '管理员查任意门店订单成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}, 响应: ${JSON.stringify(res.body?.data?.list?.length || 0)}条`
+    )
+  } catch (e: any) {
+    assert('管理员查门店订单', false, `请求失败: ${e.message}`)
+  }
+
+  console.log('\n📋 测试11：商家概览接口')
+  console.log('-'.repeat(40))
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/stores/me/overview',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '商家概览接口返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}, 响应: ${JSON.stringify(res.body)}`
+    )
+    assert(
+      '概览包含门店数量',
+      typeof data.storeCount === 'number' && data.storeCount > 0,
+      `storeCount: ${data.storeCount}`
+    )
+    assert(
+      '概览包含今日订单数',
+      typeof data.todayOrders === 'number',
+      `todayOrders: ${data.todayOrders}`
+    )
+    assert(
+      '概览包含待处理订单数',
+      typeof data.pendingOrders === 'number',
+      `pendingOrders: ${data.pendingOrders}`
+    )
+    assert(
+      '概览包含今日营业额',
+      typeof data.todayRevenue === 'number',
+      `todayRevenue: ${data.todayRevenue}`
+    )
+    assert(
+      '概览包含平均评分',
+      typeof data.avgRating === 'number',
+      `avgRating: ${data.avgRating}`
+    )
+    assert(
+      '概览包含热门菜品排行',
+      Array.isArray(data.hotDishes),
+      `hotDishes: ${Array.isArray(data.hotDishes)}`
+    )
+    assert(
+      '概览包含门店列表',
+      Array.isArray(data.stores) && data.stores.length > 0,
+      `stores: ${data.stores?.length} 家`
+    )
+    console.log(`         门店数: ${data.storeCount}, 今日订单: ${data.todayOrders}, 营业额: ¥${data.todayRevenue}`)
+  } catch (e: any) {
+    assert('商家概览接口', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/stores/admin/overview',
+      undefined,
+      adminToken
+    )
+    assert(
+      '管理员概览接口返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    assert(
+      '管理员概览包含全平台门店',
+      res.body?.data?.storeCount >= 2,
+      `storeCount: ${res.body?.data?.storeCount}`
+    )
+  } catch (e: any) {
+    assert('管理员概览接口', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/stores/admin/overview?storeId=1',
+      undefined,
+      adminToken
+    )
+    assert(
+      '管理员概览支持按门店筛选',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+  } catch (e: any) {
+    assert('管理员概览筛选', false, `请求失败: ${e.message}`)
+  }
+
+  console.log('\n📋 测试12：促销维护 + 满减计算验证')
+  console.log('-'.repeat(40))
+
+  let testPromotionId = 0
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/promotions/store/1',
+      undefined,
+      undefined
+    )
+    assert(
+      '门店促销列表可公开访问',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    assert(
+      '促销列表有数据',
+      Array.isArray(res.body?.data) && res.body.data.length > 0,
+      `促销数量: ${res.body?.data?.length}`
+    )
+    console.log(`         现有促销: ${res.body?.data?.length} 个`)
+  } catch (e: any) {
+    assert('促销列表公开访问', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'POST',
+      '/api/promotions',
+      {
+        storeId: 1,
+        type: 'full_reduce',
+        minAmount: 200,
+        discount: 35,
+        isActive: true,
+      },
+      merchantToken
+    )
+    testPromotionId = res.body?.data?.id || 0
+    assert(
+      '商家可以新增自己门店的促销',
+      res.statusCode === 200 && res.body?.code === 0 && testPromotionId > 0,
+      `状态码: ${res.statusCode}, promotionId: ${testPromotionId}`
+    )
+  } catch (e: any) {
+    assert('商家新增促销', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'POST',
+      '/api/promotions',
+      {
+        storeId: 2,
+        type: 'full_reduce',
+        minAmount: 50,
+        discount: 10,
+        isActive: true,
+      },
+      merchantToken
+    )
+    assert(
+      '商家不能新增其他门店的促销',
+      res.statusCode === 403 || res.body?.code === 403,
+      `状态码: ${res.statusCode}, 响应: ${JSON.stringify(res.body)}`
+    )
+  } catch (e: any) {
+    assert('商家越权新增促销', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'PUT',
+      `/api/promotions/${testPromotionId}`,
+      {
+        minAmount: 180,
+        discount: 38,
+      },
+      merchantToken
+    )
+    assert(
+      '商家可以修改自己门店的促销',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+  } catch (e: any) {
+    assert('商家修改促销', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    await request('POST', '/api/cart', {
+      dishId: 1, quantity: 2, specs: { 份量: '半只', 口味: '原味' }
+    }, customerToken)
+    await request('POST', '/api/cart', {
+      dishId: 2, quantity: 1, specs: { 份量: '例牌' }
+    }, customerToken)
+
+    const calcRes = await request(
+      'POST',
+      '/api/cart/calculate',
+      { storeId: 1 },
+      customerToken
+    )
+
+    const bigPromo = await request('POST', '/api/promotions', {
+      storeId: 1, type: 'full_reduce', minAmount: 50, discount: 50, isActive: true
+    }, merchantToken)
+
+    const calcRes2 = await request(
+      'POST',
+      '/api/cart/calculate',
+      { storeId: 1 },
+      customerToken
+    )
+
+    const discountBefore = calcRes.body?.data?.discountAmount || 0
+    const discountAfter = calcRes2.body?.data?.discountAmount || 0
+    const promosBefore = calcRes.body?.data?.availablePromotions?.length || 0
+    const promosAfter = calcRes2.body?.data?.availablePromotions?.length || 0
+
+    assert(
+      '新增促销后购物车计算能实时吃到最新活动',
+      discountAfter > discountBefore || promosAfter > promosBefore,
+      `修改前: ¥${discountBefore} (${promosBefore}档), 修改后: ¥${discountAfter} (${promosAfter}档)`
+    )
+    console.log(`         促销前: ${promosBefore}档优惠, 满减¥${discountBefore}; 促销后: ${promosAfter}档优惠, 满减¥${discountAfter}`)
+
+    await request('DELETE', `/api/promotions/${bigPromo.body?.data?.id}`, undefined, merchantToken)
+  } catch (e: any) {
+    assert('促销实时生效', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'POST',
+      `/api/promotions/${testPromotionId}/toggle`,
+      { isActive: false },
+      merchantToken
+    )
+    assert(
+      '商家可以停用促销',
+      res.statusCode === 200 && res.body?.code === 0 && res.body?.data?.isActive === false,
+      `状态码: ${res.statusCode}, isActive: ${res.body?.data?.isActive}`
+    )
+  } catch (e: any) {
+    assert('商家停用促销', false, `请求失败: ${e.message}`)
+  }
+
+  console.log('\n📋 测试13：配送流程 - 分配骑手')
+  console.log('-'.repeat(40))
+
+  let deliveryOrderId = 0
+  let testRiderId = 0
+
+  try {
+    const orderRes = await request(
+      'POST',
+      '/api/orders',
+      {
+        storeId: 1,
+        items: [{ dishId: 2, quantity: 1, specs: { 份量: '例牌' } }],
+        type: 'delivery',
+        address: '配送测试地址',
+        contactName: '配送测试',
+        contactPhone: '13911112222',
+      },
+      customerToken
+    )
+    deliveryOrderId = orderRes.body?.data?.id
+
+    await request('POST', `/api/orders/${deliveryOrderId}/pay`, { paymentMethod: 'wechat' }, customerToken)
+    await request('PUT', `/api/orders/${deliveryOrderId}/status`, { status: 'PREPARING' }, adminToken)
+    await request('POST', `/api/orders/${deliveryOrderId}/remind`, undefined, merchantToken)
+
+    const ridersRes = await request('GET', '/api/riders?status=IDLE')
+    testRiderId = ridersRes.body?.data?.list?.[0]?.id || 1
+
+    const res = await request(
+      'POST',
+      `/api/orders/${deliveryOrderId}/assign-rider`,
+      { riderId: testRiderId },
+      merchantToken
+    )
+    assert(
+      '商家可以分配骑手给自己门店的订单',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}, 响应: ${JSON.stringify(res.body)}`
+    )
+    assert(
+      '分配后订单状态变为配送中',
+      res.body?.data?.status === 'DELIVERING',
+      `订单状态: ${res.body?.data?.status}`
+    )
+  } catch (e: any) {
+    assert('商家分配骑手', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      `/api/orders/${deliveryOrderId}`,
+      undefined,
+      customerToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '订单详情包含骑手信息',
+      data.rider !== null && data.rider !== undefined,
+      `rider: ${JSON.stringify(data.rider)}`
+    )
+    assert(
+      '骑手信息包含姓名',
+      !!data.rider?.name,
+      `骑手姓名: ${data.rider?.name}`
+    )
+    assert(
+      '骑手信息包含位置',
+      data.rider?.latitude !== undefined && data.rider?.longitude !== undefined,
+      `位置: ${data.rider?.latitude}, ${data.rider?.longitude}`
+    )
+    console.log(`         骑手: ${data.rider?.name}, 状态: ${data.rider?.status}`)
+  } catch (e: any) {
+    assert('订单详情骑手信息', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const otherStoreOrderRes = await request(
+      'POST',
+      '/api/orders',
+      {
+        storeId: 2,
+        items: [{ dishId: 5, quantity: 1 }],
+        type: 'delivery',
+        address: '越权配送测试',
+        contactName: '越权测试',
+        contactPhone: '13922223333',
+      },
+      customerToken
+    )
+    const otherOrderId = otherStoreOrderRes.body?.data?.id
+
+    await request('POST', `/api/orders/${otherOrderId}/pay`, {}, customerToken)
+    await request('PUT', `/api/orders/${otherOrderId}/status`, { status: 'PREPARING' }, adminToken)
+    await request('PUT', `/api/orders/${otherOrderId}/status`, { status: 'READY' }, adminToken)
+
+    const res = await request(
+      'POST',
+      `/api/orders/${otherOrderId}/assign-rider`,
+      { riderId: testRiderId },
+      merchantToken
+    )
+    assert(
+      '商家不能给其他门店订单分配骑手',
+      res.statusCode === 403 || res.body?.code === 403,
+      `状态码: ${res.statusCode}, 响应: ${JSON.stringify(res.body)}`
+    )
+  } catch (e: any) {
+    assert('商家越权分配骑手', false, `请求失败: ${e.message}`)
+  }
+
   console.log('\n' + '='.repeat(60))
   console.log('📊 测试结果汇总')
   console.log('='.repeat(60))

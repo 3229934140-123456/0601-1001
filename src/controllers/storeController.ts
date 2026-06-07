@@ -181,3 +181,330 @@ export async function createAnnouncement(req: AuthRequest, res: Response) {
     res.status(500).json(errorResponse('发布公告失败', 500))
   }
 }
+
+function getTodayStart(): Date {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+}
+
+export async function getMerchantOverview(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = req.merchant?.id || req.user?.id
+
+    if (!merchantId) {
+      return res.status(401).json(errorResponse('未登录', 401))
+    }
+
+    const todayStart = getTodayStart()
+
+    const stores = await prisma.store.findMany({
+      where: { merchantId },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    const storeIds = stores.map((s) => s.id)
+    const storeCount = stores.length
+
+    if (storeCount === 0) {
+      return res.json(successResponse({
+        storeCount: 0,
+        todayOrders: 0,
+        pendingOrders: 0,
+        todayRevenue: 0,
+        avgRating: 0,
+        hotDishes: [],
+        stores: [],
+      }))
+    }
+
+    const todayOrders = await prisma.order.count({
+      where: {
+        storeId: { in: storeIds },
+        createdAt: { gte: todayStart },
+      },
+    })
+
+    const pendingOrders = await prisma.order.count({
+      where: {
+        storeId: { in: storeIds },
+        status: { in: ['PAID', 'PREPARING'] },
+      },
+    })
+
+    const todayCompletedOrders = await prisma.order.findMany({
+      where: {
+        storeId: { in: storeIds },
+        status: 'COMPLETED',
+        createdAt: { gte: todayStart },
+      },
+      select: { payAmount: true },
+    })
+
+    const todayRevenue = todayCompletedOrders.reduce((sum, order) => sum + order.payAmount, 0)
+
+    const reviews = await prisma.review.findMany({
+      where: {
+        storeId: { in: storeIds },
+        status: 'APPROVED',
+      },
+      select: { rating: true },
+    })
+
+    const avgRating = reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : 0
+
+    const orderItems = await prisma.orderItem.findMany({
+      where: {
+        order: {
+          storeId: { in: storeIds },
+        },
+      },
+      select: {
+        dishId: true,
+        dishName: true,
+        dishImage: true,
+        price: true,
+        quantity: true,
+      },
+    })
+
+    const dishMap = new Map<number, { dishId: number; dishName: string; dishImage: string | null; price: number; salesCount: number }>()
+
+    for (const item of orderItems) {
+      const existing = dishMap.get(item.dishId)
+      if (existing) {
+        existing.salesCount += item.quantity
+      } else {
+        dishMap.set(item.dishId, {
+          dishId: item.dishId,
+          dishName: item.dishName,
+          dishImage: item.dishImage,
+          price: item.price,
+          salesCount: item.quantity,
+        })
+      }
+    }
+
+    const hotDishes = Array.from(dishMap.values())
+      .sort((a, b) => b.salesCount - a.salesCount)
+      .slice(0, 10)
+
+    const storeOverviews = []
+    for (const store of stores) {
+      const storeTodayOrders = await prisma.order.count({
+        where: {
+          storeId: store.id,
+          createdAt: { gte: todayStart },
+        },
+      })
+
+      const storePendingOrders = await prisma.order.count({
+        where: {
+          storeId: store.id,
+          status: { in: ['PAID', 'PREPARING'] },
+        },
+      })
+
+      const storeTodayCompleted = await prisma.order.findMany({
+        where: {
+          storeId: store.id,
+          status: 'COMPLETED',
+          createdAt: { gte: todayStart },
+        },
+        select: { payAmount: true },
+      })
+
+      const storeTodayRevenue = storeTodayCompleted.reduce((sum, order) => sum + order.payAmount, 0)
+
+      storeOverviews.push({
+        id: store.id,
+        name: store.name,
+        coverImage: store.coverImage,
+        address: store.address,
+        rating: store.rating,
+        todayOrders: storeTodayOrders,
+        pendingOrders: storePendingOrders,
+        todayRevenue: storeTodayRevenue,
+        isOpen: isStoreOpen(store.openingTime, store.closingTime),
+      })
+    }
+
+    res.json(successResponse({
+      storeCount,
+      todayOrders,
+      pendingOrders,
+      todayRevenue,
+      avgRating,
+      hotDishes,
+      stores: storeOverviews,
+    }))
+  } catch (error) {
+    console.error('获取商家概览失败:', error)
+    res.status(500).json(errorResponse('获取商家概览失败', 500))
+  }
+}
+
+export async function getAdminOverview(req: AuthRequest, res: Response) {
+  try {
+    const { storeId } = req.query
+
+    const todayStart = getTodayStart()
+
+    const storeWhere: any = {}
+
+    if (storeId) {
+      const storeIdNum = parseInt(storeId as string)
+      if (isNaN(storeIdNum)) {
+        return res.status(400).json(errorResponse('无效的门店ID', 400))
+      }
+      storeWhere.id = storeIdNum
+    }
+
+    const stores = await prisma.store.findMany({
+      where: storeWhere,
+      orderBy: { createdAt: 'desc' },
+    })
+
+    const storeIds = stores.map((s) => s.id)
+    const storeCount = stores.length
+
+    if (storeCount === 0) {
+      return res.json(successResponse({
+        storeCount: 0,
+        todayOrders: 0,
+        pendingOrders: 0,
+        todayRevenue: 0,
+        avgRating: 0,
+        hotDishes: [],
+        stores: [],
+      }))
+    }
+
+    const todayOrders = await prisma.order.count({
+      where: {
+        storeId: { in: storeIds },
+        createdAt: { gte: todayStart },
+      },
+    })
+
+    const pendingOrders = await prisma.order.count({
+      where: {
+        storeId: { in: storeIds },
+        status: { in: ['PAID', 'PREPARING'] },
+      },
+    })
+
+    const todayCompletedOrders = await prisma.order.findMany({
+      where: {
+        storeId: { in: storeIds },
+        status: 'COMPLETED',
+        createdAt: { gte: todayStart },
+      },
+      select: { payAmount: true },
+    })
+
+    const todayRevenue = todayCompletedOrders.reduce((sum, order) => sum + order.payAmount, 0)
+
+    const reviews = await prisma.review.findMany({
+      where: {
+        storeId: { in: storeIds },
+        status: 'APPROVED',
+      },
+      select: { rating: true },
+    })
+
+    const avgRating = reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : 0
+
+    const orderItems = await prisma.orderItem.findMany({
+      where: {
+        order: {
+          storeId: { in: storeIds },
+        },
+      },
+      select: {
+        dishId: true,
+        dishName: true,
+        dishImage: true,
+        price: true,
+        quantity: true,
+      },
+    })
+
+    const dishMap = new Map<number, { dishId: number; dishName: string; dishImage: string | null; price: number; salesCount: number }>()
+
+    for (const item of orderItems) {
+      const existing = dishMap.get(item.dishId)
+      if (existing) {
+        existing.salesCount += item.quantity
+      } else {
+        dishMap.set(item.dishId, {
+          dishId: item.dishId,
+          dishName: item.dishName,
+          dishImage: item.dishImage,
+          price: item.price,
+          salesCount: item.quantity,
+        })
+      }
+    }
+
+    const hotDishes = Array.from(dishMap.values())
+      .sort((a, b) => b.salesCount - a.salesCount)
+      .slice(0, 10)
+
+    const storeOverviews = []
+    for (const store of stores) {
+      const storeTodayOrders = await prisma.order.count({
+        where: {
+          storeId: store.id,
+          createdAt: { gte: todayStart },
+        },
+      })
+
+      const storePendingOrders = await prisma.order.count({
+        where: {
+          storeId: store.id,
+          status: { in: ['PAID', 'PREPARING'] },
+        },
+      })
+
+      const storeTodayCompleted = await prisma.order.findMany({
+        where: {
+          storeId: store.id,
+          status: 'COMPLETED',
+          createdAt: { gte: todayStart },
+        },
+        select: { payAmount: true },
+      })
+
+      const storeTodayRevenue = storeTodayCompleted.reduce((sum, order) => sum + order.payAmount, 0)
+
+      storeOverviews.push({
+        id: store.id,
+        name: store.name,
+        coverImage: store.coverImage,
+        address: store.address,
+        rating: store.rating,
+        todayOrders: storeTodayOrders,
+        pendingOrders: storePendingOrders,
+        todayRevenue: storeTodayRevenue,
+        isOpen: isStoreOpen(store.openingTime, store.closingTime),
+      })
+    }
+
+    res.json(successResponse({
+      storeCount,
+      todayOrders,
+      pendingOrders,
+      todayRevenue,
+      avgRating,
+      hotDishes,
+      stores: storeOverviews,
+    }))
+  } catch (error) {
+    console.error('获取管理员概览失败:', error)
+    res.status(500).json(errorResponse('获取管理员概览失败', 500))
+  }
+}

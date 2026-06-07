@@ -15,7 +15,7 @@ router.get('/', getRiders)
 router.get('/:id', getRiderDetail)
 router.put('/:id/status', authMiddleware(), updateRiderStatus)
 router.put('/:id/location', authMiddleware(), updateRiderLocation)
-router.post('/assign', authMiddleware(['ADMIN']), assignRiderToOrder)
+router.post('/assign', authMiddleware(['MERCHANT', 'ADMIN']), assignRiderToOrder)
 router.post('/', authMiddleware(['ADMIN']), createRider)
 
 export default router

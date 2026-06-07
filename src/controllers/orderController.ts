@@ -246,6 +246,22 @@ export async function getOrderDetail(req: AuthRequest, res: Response) {
       },
     })
 
+    let rider = null
+    if (order?.riderId) {
+      rider = await prisma.rider.findUnique({
+        where: { id: order.riderId },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          avatar: true,
+          status: true,
+          latitude: true,
+          longitude: true,
+        },
+      })
+    }
+
     if (!order) {
       return res.status(404).json(errorResponse('订单不存在', 404))
     }
@@ -265,6 +281,7 @@ export async function getOrderDetail(req: AuthRequest, res: Response) {
 
     const orderWithParsed = {
       ...order,
+      rider,
       invoiceInfo: order.invoiceInfo ? JSON.parse(order.invoiceInfo) : null,
       items: order.items.map((item: any) => ({
         ...item,
@@ -656,5 +673,92 @@ export async function remindOrder(req: AuthRequest, res: Response) {
   } catch (error) {
     console.error('出餐提醒失败:', error)
     res.status(500).json(errorResponse('出餐提醒失败', 500))
+  }
+}
+
+export async function assignRider(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user?.id
+    const userRole = req.user?.role
+    const { id } = req.params
+    const { riderId } = req.body
+
+    if (!userId) {
+      return res.status(401).json(errorResponse('未登录', 401))
+    }
+
+    const orderId = parseInt(id)
+
+    if (isNaN(orderId)) {
+      return res.status(400).json(errorResponse('无效的订单ID', 400))
+    }
+
+    if (!riderId) {
+      return res.status(400).json(errorResponse('骑手ID不能为空', 400))
+    }
+
+    const riderIdNum = parseInt(riderId)
+
+    if (isNaN(riderIdNum)) {
+      return res.status(400).json(errorResponse('无效的骑手ID', 400))
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    })
+
+    if (!order) {
+      return res.status(404).json(errorResponse('订单不存在', 404))
+    }
+
+    const store = await prisma.store.findUnique({
+      where: { id: order.storeId },
+    })
+
+    if (!store) {
+      return res.status(404).json(errorResponse('门店不存在', 404))
+    }
+
+    if (userRole === 'MERCHANT' && store.merchantId !== userId) {
+      return res.status(403).json(errorResponse('无权限操作', 403))
+    }
+
+    if (order.status !== 'READY') {
+      return res.status(400).json(errorResponse('订单状态必须是已出餐才能分配骑手', 400))
+    }
+
+    const rider = await prisma.rider.findUnique({
+      where: { id: riderIdNum },
+    })
+
+    if (!rider) {
+      return res.status(404).json(errorResponse('骑手不存在', 404))
+    }
+
+    if (rider.status !== 'IDLE') {
+      return res.status(400).json(errorResponse('骑手当前不是空闲状态', 400))
+    }
+
+    const updatedOrder = await prisma.$transaction(async (tx: any) => {
+      const orderUpdate = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          riderId: riderIdNum,
+          status: 'DELIVERING',
+        },
+      })
+
+      await tx.rider.update({
+        where: { id: riderIdNum },
+        data: { status: 'DELIVERING' },
+      })
+
+      return orderUpdate
+    })
+
+    res.json(successResponse(updatedOrder, '分配骑手成功'))
+  } catch (error) {
+    console.error('分配骑手失败:', error)
+    res.status(500).json(errorResponse('分配骑手失败', 500))
   }
 }

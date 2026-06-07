@@ -9,6 +9,7 @@ import queueRoutes from './routes/queue'
 import reservationRoutes from './routes/reservation'
 import riderRoutes from './routes/rider'
 import reviewRoutes from './routes/review'
+import promotionRoutes from './routes/promotion'
 import authRoutes from './routes/auth'
 import { errorResponse } from './utils'
 
@@ -34,6 +35,7 @@ app.get('/', (req, res) => {
         '/api/reservations - 预约订座相关接口',
         '/api/riders - 骑手相关接口',
         '/api/reviews - 评价相关接口',
+        '/api/promotions - 促销相关接口',
         '/api/auth - 认证相关接口',
       ]
     }
@@ -48,6 +50,7 @@ app.use('/api/queue', queueRoutes)
 app.use('/api/reservations', reservationRoutes)
 app.use('/api/riders', riderRoutes)
 app.use('/api/reviews', reviewRoutes)
+app.use('/api/promotions', promotionRoutes)
 app.use('/api/auth', authRoutes)
 
 app.use((req, res) => {

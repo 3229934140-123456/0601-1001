@@ -4,11 +4,15 @@ import {
   getStoreDetail,
   getStoreAnnouncements,
   createAnnouncement,
+  getMerchantOverview,
+  getAdminOverview,
 } from '../controllers/storeController'
 import { authMiddleware } from '../middleware/auth'
 
 const router = Router()
 
+router.get('/me/overview', authMiddleware(['MERCHANT']), getMerchantOverview)
+router.get('/admin/overview', authMiddleware(['ADMIN']), getAdminOverview)
 router.get('/', getStores)
 router.get('/:id', getStoreDetail)
 router.get('/:id/announcements', getStoreAnnouncements)

@@ -181,14 +181,27 @@ export async function updateRiderLocation(req: AuthRequest, res: Response) {
 
 export async function assignRiderToOrder(req: AuthRequest, res: Response) {
   try {
+    const userId = req.user?.id
+    const userRole = req.user?.role
     const { riderId, orderId } = req.body
+
+    if (!userId) {
+      return res.status(401).json(errorResponse('未登录', 401))
+    }
 
     if (!riderId || !orderId) {
       return res.status(400).json(errorResponse('骑手ID和订单ID不能为空', 400))
     }
 
+    const riderIdNum = parseInt(riderId)
+    const orderIdNum = parseInt(orderId)
+
+    if (isNaN(riderIdNum) || isNaN(orderIdNum)) {
+      return res.status(400).json(errorResponse('无效的骑手ID或订单ID', 400))
+    }
+
     const rider = await prisma.rider.findUnique({
-      where: { id: parseInt(riderId) },
+      where: { id: riderIdNum },
     })
 
     if (!rider) {
@@ -200,23 +213,36 @@ export async function assignRiderToOrder(req: AuthRequest, res: Response) {
     }
 
     const order = await prisma.order.findUnique({
-      where: { id: parseInt(orderId) },
+      where: { id: orderIdNum },
     })
 
     if (!order) {
       return res.status(404).json(errorResponse('订单不存在', 404))
     }
 
+    if (userRole === 'MERCHANT') {
+      const store = await prisma.store.findUnique({
+        where: { id: order.storeId },
+      })
+      if (!store || store.merchantId !== userId) {
+        return res.status(403).json(errorResponse('无权限操作', 403))
+      }
+    }
+
+    if (order.status !== 'READY') {
+      return res.status(400).json(errorResponse('订单状态必须是已出餐才能分配骑手', 400))
+    }
+
     const [updatedOrder, updatedRider] = await prisma.$transaction([
       prisma.order.update({
-        where: { id: parseInt(orderId) },
+        where: { id: orderIdNum },
         data: {
-          riderId: parseInt(riderId),
+          riderId: riderIdNum,
           status: 'DELIVERING',
         },
       }),
       prisma.rider.update({
-        where: { id: parseInt(riderId) },
+        where: { id: riderIdNum },
         data: { status: 'DELIVERING' },
       }),
     ])
