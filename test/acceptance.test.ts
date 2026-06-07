@@ -988,6 +988,324 @@ async function runTests() {
     assert('商家越权分配骑手', false, `请求失败: ${e.message}`)
   }
 
+  console.log('\n📋 测试14：经营分析接口')
+  console.log('-'.repeat(40))
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/business?timeRange=today',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '商家经营分析接口返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    assert(
+      '经营分析包含订单数',
+      data.totalOrders !== undefined,
+      `totalOrders: ${data.totalOrders}`
+    )
+    assert(
+      '经营分析包含实收金额',
+      data.totalRevenue !== undefined,
+      `totalRevenue: ${data.totalRevenue}`
+    )
+    assert(
+      '经营分析包含退款金额',
+      data.totalRefund !== undefined,
+      `totalRefund: ${data.totalRefund}`
+    )
+    assert(
+      '经营分析包含客单价',
+      data.avgOrderValue !== undefined,
+      `avgOrderValue: ${data.avgOrderValue}`
+    )
+    assert(
+      '经营分析包含复购用户数',
+      data.repeatUsers !== undefined,
+      `repeatUsers: ${data.repeatUsers}`
+    )
+    assert(
+      '经营分析包含门店拆分数据',
+      Array.isArray(data.storeBreakdown),
+      `storeBreakdown 类型: ${typeof data.storeBreakdown}`
+    )
+    console.log(`         今日订单: ${data.totalOrders}, 营收: ¥${data.totalRevenue}, 客单价: ¥${data.avgOrderValue.toFixed?.(2) || data.avgOrderValue}`)
+  } catch (e: any) {
+    assert('商家经营分析', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/business?timeRange=7days&storeId=1',
+      undefined,
+      merchantToken
+    )
+    assert(
+      '商家经营分析支持按门店筛选',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+  } catch (e: any) {
+    assert('商家经营分析门店筛选', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/business?timeRange=30days',
+      undefined,
+      adminToken
+    )
+    assert(
+      '管理员经营分析返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    assert(
+      '管理员经营分析包含全平台门店拆分',
+      res.body?.data?.storeBreakdown?.length >= 2,
+      `门店拆分数量: ${res.body?.data?.storeBreakdown?.length}`
+    )
+  } catch (e: any) {
+    assert('管理员经营分析', false, `请求失败: ${e.message}`)
+  }
+
+  console.log('\n📋 测试15：菜品分析 + 热门菜')
+  console.log('-'.repeat(40))
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/dishes?timeRange=today',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '商家菜品分析接口返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    assert(
+      '菜品分析包含菜品列表',
+      Array.isArray(data.dishList),
+      `dishList 类型: ${typeof data.dishList}`
+    )
+    assert(
+      '菜品分析包含库存告警',
+      Array.isArray(data.lowStockDishes),
+      `lowStockDishes 类型: ${typeof data.lowStockDishes}`
+    )
+    if (data.dishList?.length > 0) {
+      const dish = data.dishList[0]
+      assert(
+        '菜品包含销量数据',
+        dish.salesCount !== undefined,
+        `salesCount: ${dish.salesCount}`
+      )
+      assert(
+        '菜品包含销售额数据',
+        dish.salesAmount !== undefined,
+        `salesAmount: ${dish.salesAmount}`
+      )
+    }
+    console.log(`         菜品数: ${data.dishList?.length || 0}, 低库存预警: ${data.lowStockDishes?.length || 0}个`)
+  } catch (e: any) {
+    assert('商家菜品分析', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/analysis/hot-dishes?timeRange=7days&limit=5',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '热门菜分析接口返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    assert(
+      '热门菜列表存在',
+      Array.isArray(data.hotDishes),
+      `hotDishes 类型: ${typeof data.hotDishes}`
+    )
+    assert(
+      '热门菜数量不超过限制',
+      data.hotDishes?.length <= 5,
+      `热门菜数量: ${data.hotDishes?.length}`
+    )
+    console.log(`         热门菜 TOP${data.hotDishes?.length || 0}: ${data.hotDishes?.map((d: any) => d.dishName)?.join(', ') || '无'}`)
+  } catch (e: any) {
+    assert('热门菜分析', false, `请求失败: ${e.message}`)
+  }
+
+  console.log('\n📋 测试16：促销管理列表 - 含停用筛选')
+  console.log('-'.repeat(40))
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/promotions/manage',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '商家促销管理列表返回成功',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    assert(
+      '促销管理列表包含全部活动（含停用）',
+      Array.isArray(data.list) && data.list.length > 0,
+      `列表长度: ${data.list?.length}`
+    )
+    console.log(`         全部促销: ${data.list?.length || 0}个`)
+  } catch (e: any) {
+    assert('商家促销管理列表', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/promotions/manage?status=inactive',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    assert(
+      '促销管理支持按状态筛选（停用）',
+      res.statusCode === 200 && res.body?.code === 0,
+      `状态码: ${res.statusCode}`
+    )
+    const allInactive = data.list?.every((p: any) => p.isActive === false) ?? true
+    assert(
+      '筛选后只返回停用状态的促销',
+      allInactive,
+      `返回的促销状态: ${data.list?.map((p: any) => p.isActive)?.join(', ')}`
+    )
+    console.log(`         停用促销: ${data.list?.length || 0}个`)
+  } catch (e: any) {
+    assert('促销状态筛选', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const res = await request(
+      'GET',
+      '/api/promotions/manage?status=active',
+      undefined,
+      merchantToken
+    )
+    const data = res.body?.data || {}
+    const allActive = data.list?.every((p: any) => p.isActive === true) ?? true
+    assert(
+      '筛选后只返回启用状态的促销',
+      allActive,
+      `返回的促销状态: ${data.list?.map((p: any) => p.isActive)?.join(', ')}`
+    )
+  } catch (e: any) {
+    assert('促销启用筛选', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    const publicRes = await request('GET', '/api/promotions/store/1')
+    const publicList = publicRes.body?.data || []
+    const allActive = publicList.every((p: any) => p.isActive === true)
+    assert(
+      '公开促销列表只返回启用中的活动',
+      allActive,
+      `公开列表中的促销状态: ${publicList.map((p: any) => p.isActive)?.join(', ')}`
+    )
+    console.log(`         公开列表（仅启用）: ${publicList.length}个`)
+  } catch (e: any) {
+    assert('公开促销列表仅启用', false, `请求失败: ${e.message}`)
+  }
+
+  console.log('\n📋 测试17：清空门店购物车')
+  console.log('-'.repeat(40))
+
+  try {
+    await request('POST', '/api/cart', {
+      dishId: 1, quantity: 2, specs: { 份量: '半只', 口味: '原味' }
+    }, customerToken)
+    await request('POST', '/api/cart', {
+      dishId: 2, quantity: 1, specs: { 份量: '例牌' }
+    }, customerToken)
+
+    const cartRes = await request('GET', '/api/cart', undefined, customerToken)
+    const store1Group = cartRes.body?.data?.find((g: any) => g.storeId === 1)
+    const itemCountBefore = store1Group?.items?.length || 0
+    assert(
+      '添加购物车后商品数量正确',
+      itemCountBefore >= 2,
+      `添加后商品数: ${itemCountBefore}`
+    )
+
+    const clearRes = await request(
+      'DELETE',
+      '/api/cart/store/1',
+      undefined,
+      customerToken
+    )
+    assert(
+      '清空门店购物车成功',
+      clearRes.statusCode === 200 && clearRes.body?.code === 0,
+      `状态码: ${clearRes.statusCode}, 响应: ${JSON.stringify(clearRes.body)}`
+    )
+
+    const cartAfter = await request('GET', '/api/cart', undefined, customerToken)
+    const store1After = cartAfter.body?.data?.find((g: any) => g.storeId === 1)
+    const itemCountAfter = store1After?.items?.length || 0
+    assert(
+      '清空后购物车商品已移除',
+      itemCountAfter === 0 || store1After === undefined,
+      `清空后商品数: ${itemCountAfter}`
+    )
+    console.log(`         清空前: ${itemCountBefore}件, 清空后: ${itemCountAfter}件`)
+  } catch (e: any) {
+    assert('清空门店购物车', false, `请求失败: ${e.message}`)
+  }
+
+  try {
+    await request('POST', '/api/cart', {
+      dishId: 1, quantity: 3, specs: { 份量: '半只', 口味: '原味' }
+    }, customerToken)
+
+    const calcBefore = await request(
+      'POST',
+      '/api/cart/calculate',
+      { storeId: 1 },
+      customerToken
+    )
+
+    await request('DELETE', '/api/cart/store/1', undefined, customerToken)
+
+    const calcAfter = await request(
+      'POST',
+      '/api/cart/calculate',
+      { storeId: 1 },
+      customerToken
+    )
+
+    assert(
+      '清空购物车后重新计算返回购物车为空',
+      calcAfter.statusCode === 400 || calcAfter.body?.code === 400,
+      `状态码: ${calcAfter.statusCode}, 响应: ${JSON.stringify(calcAfter.body)}`
+    )
+    console.log(`         清空前计算: ¥${calcBefore.body?.data?.payAmount || '失败'}, 清空后: 购物车为空`)
+  } catch (e: any) {
+    assert('清空后重新计算', false, `请求失败: ${e.message}`)
+  }
+
   console.log('\n' + '='.repeat(60))
   console.log('📊 测试结果汇总')
   console.log('='.repeat(60))

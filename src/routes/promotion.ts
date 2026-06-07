@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import {
   getPromotionsByStore,
+  getPromotionsManageList,
   createPromotion,
   updatePromotion,
   deletePromotion,
@@ -10,6 +11,7 @@ import { authMiddleware } from '../middleware/auth'
 
 const router = Router()
 
+router.get('/manage', authMiddleware(['MERCHANT', 'ADMIN']), getPromotionsManageList)
 router.get('/store/:storeId', getPromotionsByStore)
 
 router.post('/', authMiddleware(['MERCHANT', 'ADMIN']), createPromotion)

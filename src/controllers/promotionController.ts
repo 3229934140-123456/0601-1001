@@ -51,6 +51,82 @@ export async function getPromotionsByStore(req: Request, res: Response) {
   }
 }
 
+export async function getPromotionsManageList(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user?.id
+    const userRole = req.user?.role
+    const { storeId, status, page = '1', pageSize = '20' } = req.query
+
+    if (!userId) {
+      return res.status(401).json(errorResponse('未登录', 401))
+    }
+
+    const pageNum = parseInt(page as string)
+    const pageSizeNum = parseInt(pageSize as string)
+    const skip = (pageNum - 1) * pageSizeNum
+
+    const where: any = {}
+
+    if (storeId) {
+      const storeIdNum = parseInt(storeId as string)
+      if (isNaN(storeIdNum)) {
+        return res.status(400).json(errorResponse('无效的门店ID', 400))
+      }
+      where.storeId = storeIdNum
+
+      const permissionCheck = await checkStorePermission(req, storeIdNum)
+      if (!permissionCheck.allowed) {
+        return res.status(permissionCheck.status!).json(errorResponse(permissionCheck.message!, permissionCheck.status!))
+      }
+    } else if (userRole === 'MERCHANT') {
+      const merchantStores = await prisma.store.findMany({
+        where: { merchantId: userId },
+        select: { id: true },
+      })
+      const storeIds = merchantStores.map((s) => s.id)
+      if (storeIds.length === 0) {
+        return res.json(successResponse({ list: [], total: 0, page: pageNum, pageSize: pageSizeNum }))
+      }
+      where.storeId = { in: storeIds }
+    }
+
+    if (status !== undefined && status !== null && status !== '') {
+      if (status === 'active') {
+        where.isActive = true
+      } else if (status === 'inactive') {
+        where.isActive = false
+      }
+    }
+
+    const promotions = await prisma.promotion.findMany({
+      where,
+      skip,
+      take: pageSizeNum,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    })
+
+    const total = await prisma.promotion.count({ where })
+
+    res.json(successResponse({
+      list: promotions,
+      total,
+      page: pageNum,
+      pageSize: pageSizeNum,
+    }, '获取成功'))
+  } catch (error) {
+    console.error('获取促销管理列表失败:', error)
+    res.status(500).json(errorResponse('获取促销管理列表失败', 500))
+  }
+}
+
 export async function createPromotion(req: AuthRequest, res: Response) {
   try {
     const { storeId, type, minAmount, discount, isActive } = req.body

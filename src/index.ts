@@ -10,6 +10,7 @@ import reservationRoutes from './routes/reservation'
 import riderRoutes from './routes/rider'
 import reviewRoutes from './routes/review'
 import promotionRoutes from './routes/promotion'
+import analysisRoutes from './routes/analysis'
 import authRoutes from './routes/auth'
 import { errorResponse } from './utils'
 
@@ -51,6 +52,7 @@ app.use('/api/reservations', reservationRoutes)
 app.use('/api/riders', riderRoutes)
 app.use('/api/reviews', reviewRoutes)
 app.use('/api/promotions', promotionRoutes)
+app.use('/api/analysis', analysisRoutes)
 app.use('/api/auth', authRoutes)
 
 app.use((req, res) => {

@@ -13,9 +13,9 @@ const router = Router()
 
 router.get('/', authMiddleware(['CUSTOMER']), getCart)
 router.post('/', authMiddleware(['CUSTOMER']), addToCart)
+router.delete('/store/:storeId', authMiddleware(['CUSTOMER']), clearStoreCart)
 router.put('/:id', authMiddleware(['CUSTOMER']), updateCartItemQuantity)
 router.delete('/:id', authMiddleware(['CUSTOMER']), removeFromCart)
-router.delete('/store/:storeId', authMiddleware(['CUSTOMER']), clearStoreCart)
 router.post('/calculate', authMiddleware(['CUSTOMER']), calculateCart)
 
 export default router
